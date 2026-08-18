@@ -13,8 +13,7 @@
     .\run.ps1 -contratada 300 -salvar
 #>
 
-& {
-    [CmdletBinding()]
+function Invoke-NetworkDoctorLauncher {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$Argumentos
@@ -139,4 +138,6 @@
 
     # Executa o Network Doctor
     & $pythonExe $passArgs
-} @args
+}
+
+Invoke-NetworkDoctorLauncher @args
