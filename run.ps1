@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Launcher universal do Network Doctor para Windows (PowerShell).
 
@@ -44,7 +44,7 @@ function Invoke-NetworkDoctorLauncher {
     }
 
     function Install-PortablePython {
-        Write-Host "  ⏳ Python nao encontrado no sistema. Baixando ambiente portatil..." -ForegroundColor Yellow
+        Write-Host "  [*] Python nao encontrado no sistema. Baixando ambiente portatil..." -ForegroundColor Yellow
         if (-not (Test-Path $PythonDir)) {
             New-Item -ItemType Directory -Path $PythonDir -Force | Out-Null
         }
@@ -65,12 +65,12 @@ function Invoke-NetworkDoctorLauncher {
                 $pthContent = $pthContent -replace '^#import site', 'import site'
                 Set-Content -Path $pthFile.FullName -Value $pthContent
             }
-            Write-Host "  ✓ Ambiente Python portatil preparado com sucesso!" -ForegroundColor Green
+            Write-Host "  [+] Ambiente Python portatil preparado com sucesso!" -ForegroundColor Green
             return (Join-Path $PythonDir 'python.exe')
         }
         catch {
-            Write-Host "  ❌ Nao foi possivel preparar o Python portatil: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "  👉 Instale o Python em https://www.python.org/downloads/ ou via: winget install Python.Python.3.12" -ForegroundColor Yellow
+            Write-Host "  [-] Nao foi possivel preparar o Python portatil: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  [!] Instale o Python em https://www.python.org/downloads/ ou via: winget install Python.Python.3.12" -ForegroundColor Yellow
             return $null
         }
     }
@@ -84,7 +84,7 @@ function Invoke-NetworkDoctorLauncher {
         }
 
         # Se estiver rodando via irm | iex (remoto)
-        Write-Host "  ⏳ Baixando a versao mais recente do Network Doctor..." -ForegroundColor Cyan
+        Write-Host "  [*] Baixando a versao mais recente do Network Doctor..." -ForegroundColor Cyan
         if (-not (Test-Path $TempBase)) {
             New-Item -ItemType Directory -Path $TempBase -Force | Out-Null
         }
@@ -117,7 +117,7 @@ function Invoke-NetworkDoctorLauncher {
 
     $workingDir = Sync-NetworkDoctorCode -LocalScriptDir $scriptDir
     if (-not $workingDir -or -not (Test-Path (Join-Path $workingDir 'main.py'))) {
-        Write-Host "  ❌ Erro: Nao foi possivel localizar o ponto de entrada main.py do Network Doctor." -ForegroundColor Red
+        Write-Host "  [-] Erro: Nao foi possivel localizar o ponto de entrada main.py do Network Doctor." -ForegroundColor Red
         exit 1
     }
 
