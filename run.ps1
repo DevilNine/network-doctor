@@ -27,18 +27,81 @@ function Invoke-NetworkDoctorLauncher {
     $AppDir     = Join-Path $TempBase 'app'
     $PythonDir  = Join-Path $TempBase 'python'
 
+    function Test-PythonCandidate {
+        param([string]$CandidatePath)
+        if ([string]::IsNullOrWhiteSpace($CandidatePath)) { return $false }
+        if (-not (Test-Path -LiteralPath $CandidatePath)) { return $false }
+
+        # Rejeita stubs de 0 bytes do WindowsApps (Microsoft Store redirect)
+        if ($CandidatePath -like '*\Microsoft\WindowsApps\*') {
+            try {
+                $item = Get-Item -LiteralPath $CandidatePath -ErrorAction Stop
+                if ($item.Length -eq 0) {
+                    return $false
+                }
+            } catch {
+                return $false
+            }
+        }
+
+        try {
+            $pInfo = New-Object System.Diagnostics.ProcessStartInfo
+            $pInfo.FileName = $CandidatePath
+            $pInfo.Arguments = '-c "import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)"'
+            $pInfo.UseShellExecute = $false
+            $pInfo.CreateNoWindow = $true
+            $pInfo.RedirectStandardOutput = $true
+            $pInfo.RedirectStandardError = $true
+
+            $proc = [System.Diagnostics.Process]::Start($pInfo)
+            $proc.WaitForExit(3000)
+            if ($proc.HasExited -and $proc.ExitCode -eq 0) {
+                return $true
+            } else {
+                if (-not $proc.HasExited) { $proc.Kill() }
+                return $false
+            }
+        } catch {
+            return $false
+        }
+    }
+
     function Find-PythonExecutable {
-        # 1. Tenta python no PATH
-        $pyCmd = Get-Command 'python.exe' -ErrorAction SilentlyContinue
-        if ($pyCmd) { return $pyCmd.Source }
-
-        # 2. Tenta py launcher
-        $pyLauncher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
-        if ($pyLauncher) { return $pyLauncher.Source }
-
-        # 3. Tenta python isolado no TEMP
+        # 1. Tenta python isolado no TEMP se ja existir
         $localPy = Join-Path $PythonDir 'python.exe'
-        if (Test-Path $localPy) { return $localPy }
+        if (Test-PythonCandidate $localPy) { return $localPy }
+
+        # 2. Tenta py launcher oficial
+        $pyLaunchers = Get-Command 'py.exe' -All -ErrorAction SilentlyContinue
+        foreach ($cmd in $pyLaunchers) {
+            if (Test-PythonCandidate $cmd.Source) { return $cmd.Source }
+        }
+
+        # 3. Tenta python.exe no PATH (filtrando stubs do WindowsApps)
+        $pyCmds = Get-Command 'python.exe' -All -ErrorAction SilentlyContinue
+        foreach ($cmd in $pyCmds) {
+            if (Test-PythonCandidate $cmd.Source) { return $cmd.Source }
+        }
+
+        # 4. Tenta python3.exe no PATH
+        $py3Cmds = Get-Command 'python3.exe' -All -ErrorAction SilentlyContinue
+        foreach ($cmd in $py3Cmds) {
+            if (Test-PythonCandidate $cmd.Source) { return $cmd.Source }
+        }
+
+        # 5. Tenta caminhos padrao de instalacao no Windows
+        $commonPaths = @(
+            "$env:LocalAppData\Programs\Python\Python3*\python.exe",
+            "$env:ProgramFiles\Python3*\python.exe",
+            "$env:ProgramFiles(x86)\Python3*\python.exe",
+            "C:\Python3*\python.exe"
+        )
+        foreach ($pattern in $commonPaths) {
+            $found = Get-Item -Path $pattern -ErrorAction SilentlyContinue
+            foreach ($f in $found) {
+                if (Test-PythonCandidate $f.FullName) { return $f.FullName }
+            }
+        }
 
         return $null
     }
@@ -49,8 +112,10 @@ function Invoke-NetworkDoctorLauncher {
             New-Item -ItemType Directory -Path $PythonDir -Force | Out-Null
         }
 
-        $zipFile = Join-Path $TempBase 'python-embed.zip'
-        $pyUrl = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip'
+        $is64 = [Environment]::Is64BitOperatingSystem
+        $arch = if ($is64) { 'amd64' } else { 'win32' }
+        $zipFile = Join-Path $TempBase "python-embed-$arch.zip"
+        $pyUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-$arch.zip"
 
         try {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
@@ -65,8 +130,14 @@ function Invoke-NetworkDoctorLauncher {
                 $pthContent = $pthContent -replace '^#import site', 'import site'
                 Set-Content -Path $pthFile.FullName -Value $pthContent
             }
-            Write-Host "  [+] Ambiente Python portatil preparado com sucesso!" -ForegroundColor Green
-            return (Join-Path $PythonDir 'python.exe')
+
+            $downloadedPy = Join-Path $PythonDir 'python.exe'
+            if (Test-PythonCandidate $downloadedPy) {
+                Write-Host "  [+] Ambiente Python portatil preparado com sucesso!" -ForegroundColor Green
+                return $downloadedPy
+            } else {
+                throw "Executavel do Python baixado nao passou na validacao."
+            }
         }
         catch {
             Write-Host "  [-] Nao foi possivel preparar o Python portatil: $($_.Exception.Message)" -ForegroundColor Red
@@ -133,7 +204,13 @@ function Invoke-NetworkDoctorLauncher {
     $mainPy = Join-Path $workingDir 'main.py'
     $passArgs = @($mainPy)
     if ($Argumentos) {
-        $passArgs += $Argumentos
+        foreach ($arg in $Argumentos) {
+            if ($arg -match '^-[a-zA-Z]{2,}') {
+                $passArgs += "-$arg"
+            } else {
+                $passArgs += $arg
+            }
+        }
     }
 
     # Executa o Network Doctor

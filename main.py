@@ -73,10 +73,21 @@ def _montar_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _normalizar_argv(argv: list[str]) -> list[str]:
+    res = []
+    for a in argv:
+        if a.startswith("-") and not a.startswith("--") and len(a) > 2:
+            res.append("-" + a)
+        else:
+            res.append(a)
+    return res
+
+
 def main(argv: list[str] | None = None) -> int:
     util.configure_stdout()
     util.enable_ansi()
-    args = _montar_parser().parse_args(argv)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    args = _montar_parser().parse_args(_normalizar_argv(raw_args))
     util.MODO_JSON = args.json
 
     individuais = [m for m in ("latencia", "dns", "velocidade", "uso", "roteador", "wifi") if getattr(args, m)]
