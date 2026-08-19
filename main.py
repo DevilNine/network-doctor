@@ -20,6 +20,10 @@ import os
 import re
 import sys
 
+_RAIZ = os.path.dirname(os.path.abspath(__file__))
+if _RAIZ not in sys.path:
+    sys.path.insert(0, _RAIZ)
+
 from src import diagnostico, relatorio, util
 
 __version__ = "1.1.0"

@@ -128,6 +128,9 @@ function Invoke-NetworkDoctorLauncher {
             if ($pthFile) {
                 $pthContent = Get-Content $pthFile.FullName
                 $pthContent = $pthContent -replace '^#import site', 'import site'
+                if ($pthContent -notmatch '\.\.\\app') {
+                    $pthContent += "`n..\app`n."
+                }
                 Set-Content -Path $pthFile.FullName -Value $pthContent
             }
 
@@ -200,6 +203,9 @@ function Invoke-NetworkDoctorLauncher {
         }
     }
 
+    # Define PYTHONPATH apontando para a pasta raiz do app
+    $env:PYTHONPATH = $workingDir
+
     # Monta os argumentos
     $mainPy = Join-Path $workingDir 'main.py'
     $passArgs = @($mainPy)
@@ -213,8 +219,14 @@ function Invoke-NetworkDoctorLauncher {
         }
     }
 
-    # Executa o Network Doctor
-    & $pythonExe $passArgs
+    # Executa o Network Doctor a partir da pasta do app
+    Push-Location $workingDir
+    try {
+        & $pythonExe $passArgs
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 Invoke-NetworkDoctorLauncher @args

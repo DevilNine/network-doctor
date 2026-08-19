@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import unittest
+
+_RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _RAIZ not in sys.path:
+    sys.path.insert(0, _RAIZ)
 
 from src import relatorio, util
 from src.relatorio import _banda
